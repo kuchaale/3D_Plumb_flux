@@ -49,9 +49,8 @@ def interp(lev, data, lev_int):
 in_file = sys.argv[1] #input file
 scale_by_sqrt_p = True #scaled by square root of (1000/p)
 inter_bool = True #interpolate to regular vertical grid
-#start1 = time.time()
 
-print 'otevirani dat'
+print 'openning files'
 dataset = Dataset(in_file, 'r')
 t = dataset.variables['te'][:]
 g = dataset.variables['geopoth'][:]
@@ -68,7 +67,7 @@ nlon = lon.shape[0]
 ntime = tim.shape[0]
 
 
-print 'probiha vypocet'
+print 'calculation'
 #constants
 ga = 9.80665
 sclhgt=8000.
@@ -85,13 +84,12 @@ lev_tmp = np.reshape(lev,(1,nlev,1,1))
 cos_tmp = np.reshape(np.cos(phi),(1,1,nlat,1))
 f_tmp = np.reshape(f,(1,1,nlat,1))
 
-
 theta = bn.nanmean(t, axis=3)[...,np.newaxis]*(1000./lev_tmp)**(0.286) #potential temperature
 
 dthetadz =  c_diff(theta, -sclhgt*loglevel, 1, False)
 NN = (gc*(lev_tmp/1000.)**0.286)/sclhgt * dthetadz #Brunt-Vaisala
 
-psidev = rmv_mean(g)*ga/f_tmp 
+psidev = rmv_mean(g)*ga/f_tmp #QG streamfunction 
 dpsidevdlon = c_diff(psidev, lon, 3, True)
 dpsidevdlonlon = c_diff(dpsidevdlon, lon, 3, True) 
 dpsidevdlat = c_diff(psidev, lat, 2, False)
@@ -99,15 +97,13 @@ dpsidevdlonlat = c_diff(dpsidevdlon, lat, 2, False)
 dpsidevdz = c_diff(psidev, -sclhgt*loglevel, 1, False)
 dpsidevdlonz = c_diff(dpsidevdlon, -sclhgt*loglevel, 1, False)
 
-#eq. 5.7 Plumb (1985)
+#eq. 5.7 in Plumb (1985)
 Fx = ((lev_tmp/1000.)/(2*a*a*cos_tmp))*(dpsidevdlon*dpsidevdlon - psidev*dpsidevdlonlon)
 Fy = ((lev_tmp/1000.)/(2*a*a))*(dpsidevdlon*dpsidevdlat - psidev*dpsidevdlonlat)
 Fz = ((f_tmp*f_tmp*(lev_tmp/1000.))/(2*NN*a))*(dpsidevdlon*dpsidevdz - psidev*dpsidevdlonz)
-#time2 = time.time()-start1
 
-
-print 'probiha interpolace'
 if inter_bool:
+	print 'interpolation'
 	lev_int = np.concatenate((10**np.linspace(3,2.1,10),10**np.linspace(2,-0.95,15)))#10**np.linspace(2,-0.8,15 
 	Fx_int = interp(lev, Fx, lev_int)
 	Fy_int = interp(lev, Fy, lev_int)  
@@ -120,9 +116,7 @@ else:
 	Fy_int = np.copy(Fy) 
 	Fz_int = np.copy(Fz)
 
-#time3 = time.time()-start1
-
-print 'probiha zapisovani'
+print 'NetCDF files writing'
 os.system('mkdir -p ./Plumb_flux/')
 f = Dataset('./Plumb_flux/'+in_file, 'w')#, format='NETCDF3_CLASSIC')
 f.createDimension('lat', nlat)
@@ -150,7 +144,6 @@ fx.units = 'm^2/s^2'
 fy.units = 'm^2/s^2'
 fz.units = 'm^2/s^2'
 
-
 t[:] = tim
 latitude[:] = lat
 levels[:] = lev_int
@@ -160,10 +153,6 @@ fx[:] = Fx_int
 fy[:] = Fy_int
 fz[:] = Fz_int
 
-
 f.close()			
-#time4 = time.time()-start1
-#print time1/time4*100,time2/time4*100,time3/time4*100,time4/time4*100
-
 print 'done'
  
